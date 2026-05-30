@@ -8,6 +8,7 @@ class LanguageDetector:
     def __init__(self, model_path=DEFAULT_MODEL_PATH):
         self.model_path = model_path
         self.model = None
+        self.load_model()
 
     def load_model(self):
         if not os.path.exists(self.model_path):
@@ -16,6 +17,9 @@ class LanguageDetector:
                 "Please place the saved 'lang_detector.pkl' file inside the 'saved_models/' directory."
             )
         self.model = joblib.load(self.model_path)
+        print(f"Language model loaded successfully from: {self.model_path}")
+
+
 
     def predict(self, text: str) -> str:
         if self.model is None:
