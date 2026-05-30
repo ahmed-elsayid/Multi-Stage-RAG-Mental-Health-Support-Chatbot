@@ -8,7 +8,6 @@ class LanguageDetector:
     def __init__(self, model_path=DEFAULT_MODEL_PATH):
         self.model_path = model_path
         self.model = None
-        self.load_model()
 
     def load_model(self):
         if not os.path.exists(self.model_path):
@@ -27,7 +26,21 @@ class LanguageDetector:
 if __name__ == "__main__":
     try:
         detector = LanguageDetector()
-        print("Language detector model loaded successfully.")
-        print("Detected language:", detector.predict("Hello, how are you?"))
+        detector.load_model()
+        test_texts = [
+            "can you help me with my anxiety?",
+            "¿Cómo estás?",
+            "Bonjour, comment ça va?",
+            "Hallo, wie geht's dir?"
+        ]
+        for text in test_texts:
+            lang = detector.predict(text)
+            print(f"Text: '{text}' -> Detected Language: '{lang}'")
     except Exception as e:
-        print("Initialization failed:", e)
+        print(f"Error during testing: {e}")
+
+
+
+
+
+

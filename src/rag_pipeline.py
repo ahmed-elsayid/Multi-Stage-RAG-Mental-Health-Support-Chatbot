@@ -1,11 +1,12 @@
 """
-rag_runtime.py
---------------
-Runtime RAG pipeline for Module 4 - Q&A Mental Health Chatbot.
+rag_pipeline.py
+---------------
+Runtime RAG pipeline for the Mental Health Chatbot.
 
-This script ONLY does retrieval and generation.
-It connects to the existing Qdrant collection that was populated by 04_QA_RAG.ipynb.
-It never recreates the collection, re-embeds the dataset, or re-uploads vectors.
+Handles retrieval from Qdrant and generation via Groq.
+Streaming is handled in app.py using the Groq client directly —
+this module exposes the retrieval + prompt-building helpers,
+plus a non-streaming generate_answer() for standalone testing.
 """
 
 import os
@@ -23,34 +24,53 @@ QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 GROQ_API_KEY   = os.getenv("GROQ_API_KEY")
 
 if not all([QDRANT_URL, QDRANT_API_KEY, GROQ_API_KEY]):
-    raise EnvironmentError(
-        "Missing one or more API keys. "
-        "Make sure QDRANT_URL, QDRANT_API_KEY, and GROQ_API_KEY are set in your .env file."
+    import warnings
+    warnings.warn(
+        "Missing one or more API keys (QDRANT_URL, QDRANT_API_KEY, GROQ_API_KEY). "
+        "Retrieval will be unavailable until the .env file is configured.",
+        RuntimeWarning,
+        stacklevel=2,
     )
 
-# ── 2. Load the embedding model ───────────────────────────────────────────────
-# Must be the same model used during indexing in 04_QA_RAG.ipynb.
-# Using a different model would produce incompatible vectors.
+# ── 2. Load embedding model (lazy) ───────────────────────────────────────────
 
-print("Loading embedding model...")
-embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
-print("Embedding model ready.")
+_embedding_model = None
 
-# ── 3. Connect to Qdrant Cloud ────────────────────────────────────────────────
-# Connect to the existing collection. Do NOT create or recreate it here.
+def _get_embedding_model():
+    global _embedding_model
+    if _embedding_model is None:
+        print("Loading embedding model...")
+        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        print("Embedding model ready.")
+    return _embedding_model
 
-qdrant_client = QdrantClient(
-    url=QDRANT_URL,
-    api_key=QDRANT_API_KEY,
-)
+# ── 3. Connect to Qdrant (lazy) ───────────────────────────────────────────────
+
+_qdrant_client = None
+
+def _get_qdrant_client():
+    global _qdrant_client
+    if _qdrant_client is None:
+        if not QDRANT_URL or not QDRANT_API_KEY:
+            raise RuntimeError("QDRANT_URL and QDRANT_API_KEY must be set in .env")
+        _qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+    return _qdrant_client
 
 COLLECTION_NAME = "mental_health_chunks"
 
-# ── 4. Connect to Groq ────────────────────────────────────────────────────────
+# ── 4. Connect to Groq (lazy) ─────────────────────────────────────────────────
 
-groq_client = Groq(api_key=GROQ_API_KEY)
+_groq_client = None
 
-GROQ_MODEL = "openai/gpt-oss-20b"
+def _get_groq_client():
+    global _groq_client
+    if _groq_client is None:
+        if not GROQ_API_KEY:
+            raise RuntimeError("GROQ_API_KEY must be set in .env")
+        _groq_client = Groq(api_key=GROQ_API_KEY)
+    return _groq_client
+
+GROQ_MODEL = "llama-3.1-8b-instant"
 
 # ── 5. Crisis safety check ────────────────────────────────────────────────────
 
@@ -79,21 +99,20 @@ CRISIS_RESPONSE = (
 )
 
 def is_crisis(text: str) -> bool:
-    """Return True if the text contains any obvious crisis phrase."""
+    """Return True if the text contains any crisis phrase."""
     text_lower = text.lower()
     return any(kw in text_lower for kw in CRISIS_KEYWORDS)
 
-# ── 6. Retrieval function ─────────────────────────────────────────────────────
+# ── 6. Retrieval ──────────────────────────────────────────────────────────────
 
 def retrieve_chunks(question: str, top_k: int = 3) -> list[dict]:
     """
     Embed the question and retrieve the top-k most similar chunks from Qdrant.
-
     Returns a list of dicts with keys: context, response, score.
     """
-    query_vector = embedding_model.encode(question).tolist()
+    query_vector = _get_embedding_model().encode(question).tolist()
 
-    search_result = qdrant_client.query_points(
+    search_result = _get_qdrant_client().query_points(
         collection_name=COLLECTION_NAME,
         query=query_vector,
         limit=top_k,
@@ -112,10 +131,9 @@ def retrieve_chunks(question: str, top_k: int = 3) -> list[dict]:
 
 # ── 7. Prompt builder ─────────────────────────────────────────────────────────
 
-def build_prompt(question: str, chunks: list[dict], emotion: str = None) -> tuple[str, str]:
+def build_prompt(question: str, chunks: list[dict], emotion: str = None, language: str = None) -> tuple[str, str]:
     """
-    Build the system and user prompts from the retrieved chunks.
-
+    Build system and user prompts from the retrieved chunks.
     Returns (system_prompt, user_prompt).
     """
     retrieved_text = ""
@@ -128,6 +146,11 @@ def build_prompt(question: str, chunks: list[dict], emotion: str = None) -> tupl
         )
 
     emotion_note = f"The detected emotion is: {emotion}.\n" if emotion else ""
+    language_note = (
+        f"IMPORTANT: You MUST reply in the same language as the user's message. "
+        f"The detected language code is: '{language}'. "
+        f"Do not switch to English or any other language under any circumstances.\n"
+    ) if language else ""
 
     system_prompt = (
         "You are a supportive mental health assistant. "
@@ -139,6 +162,7 @@ def build_prompt(question: str, chunks: list[dict], emotion: str = None) -> tupl
     )
 
     user_prompt = (
+        f"{language_note}"
         f"{emotion_note}"
         f"Retrieved context from the counseling knowledge base:\n\n"
         f"{retrieved_text}"
@@ -148,11 +172,13 @@ def build_prompt(question: str, chunks: list[dict], emotion: str = None) -> tupl
 
     return system_prompt, user_prompt
 
-# ── 8. Answer generation ──────────────────────────────────────────────────────
+# ── 8. Non-streaming answer generation (for standalone testing only) ──────────
+# NOTE: app.py uses Groq's streaming API directly for real-time responses.
+# This function is kept for __main__ testing convenience only.
 
 def generate_answer(system_prompt: str, user_prompt: str) -> str:
-    """Call Groq and return the generated answer string."""
-    response = groq_client.chat.completions.create(
+    """Call Groq and return the full generated answer (non-streaming)."""
+    response = _get_groq_client().chat.completions.create(
         model=GROQ_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -163,37 +189,22 @@ def generate_answer(system_prompt: str, user_prompt: str) -> str:
     )
     return response.choices[0].message.content
 
-# ── 9. Final chatbot function ─────────────────────────────────────────────────
+# ── 9. Convenience wrapper (for testing) ──────────────────────────────────────
 
 def mental_health_chatbot(question: str, emotion: str = None) -> str:
     """
-    Main entry point for the runtime chatbot.
-
-    Args:
-        question: the user's message
-        emotion:  optional emotion label from Module 2 (e.g. 'anxiety', 'sadness')
-
-    Returns:
-        A crisis safety message if crisis language is detected,
-        otherwise a RAG-generated answer grounded in the counseling dataset.
+    Non-streaming entry point for local testing.
+    The real app uses streaming via app.py directly.
     """
-    # Step 1 - Crisis check
     if is_crisis(question):
         return CRISIS_RESPONSE
 
-    # Step 2 - Retrieve relevant chunks from Qdrant
     chunks = retrieve_chunks(question, top_k=3)
-
-    # Step 3 - Build prompts
     system_prompt, user_prompt = build_prompt(question, chunks, emotion=emotion)
-
-    # Step 4 - Generate answer
-    answer = generate_answer(system_prompt, user_prompt)
-
-    return answer
+    return generate_answer(system_prompt, user_prompt)
 
 
-# ── 10. Quick local test (only runs when script is called directly) ───────────
+# ── 10. Quick local test ──────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     print("\n--- Test 1: Anxiety ---")
