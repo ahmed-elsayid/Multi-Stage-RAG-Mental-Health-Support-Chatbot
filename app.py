@@ -10,7 +10,7 @@ Endpoints:
 
 from fastapi import FastAPI
 from pydantic import BaseModel
-from src.rag_runtime import mental_health_chatbot
+from src.rag_pipeline import mental_health_chatbot
 
 app = FastAPI(
     title="Multi-Stage RAG Mental Health Support Chatbot",
