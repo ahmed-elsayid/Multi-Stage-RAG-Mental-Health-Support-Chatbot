@@ -1,0 +1,26 @@
+# Core ML and NLP
+torch
+transformers
+sentence-transformers
+datasets
+pandas
+
+# Vector database
+qdrant-client
+
+# LLM API
+groq
+
+# API server
+fastapi
+uvicorn[standard]
+
+# UI
+streamlit
+
+# Environment variables
+python-dotenv
+
+# Scikit-learn (language detection + emotion classifiers)
+scikit-learn
+langdetect
