@@ -10,18 +10,21 @@ plus a non-streaming generate_answer() for standalone testing.
 """
 
 import os
-from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer
 from qdrant_client import QdrantClient
 from groq import Groq
-
 # ── 1. Load API keys ──────────────────────────────────────────────────────────
-
-load_dotenv()
-
-QDRANT_URL     = os.getenv("QDRANT_URL")
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-GROQ_API_KEY   = os.getenv("GROQ_API_KEY")
+from config import (
+    GROQ_MODEL,
+    GROQ_API_KEY,
+    QDRANT_URL,
+    QDRANT_API_KEY,
+    COLLECTION_NAME,
+    EMBEDDING_MODEL,
+    TOP_K_CHUNKS,
+    MAX_TOKENS_RESPONSE,
+    TEMPERATURE_GENERATION
+)
 
 if not all([QDRANT_URL, QDRANT_API_KEY, GROQ_API_KEY]):
     import warnings
@@ -40,7 +43,7 @@ def _get_embedding_model():
     global _embedding_model
     if _embedding_model is None:
         print("Loading embedding model...")
-        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2")
+        _embedding_model = SentenceTransformer(EMBEDDING_MODEL)
         print("Embedding model ready.")
     return _embedding_model
 
@@ -56,7 +59,6 @@ def _get_qdrant_client():
         _qdrant_client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
     return _qdrant_client
 
-COLLECTION_NAME = "mental_health_chunks"
 
 # ── 4. Connect to Groq (lazy) ─────────────────────────────────────────────────
 
@@ -69,8 +71,6 @@ def _get_groq_client():
             raise RuntimeError("GROQ_API_KEY must be set in .env")
         _groq_client = Groq(api_key=GROQ_API_KEY)
     return _groq_client
-
-GROQ_MODEL = "llama-3.1-8b-instant"
 
 # ── 5. Crisis safety check ────────────────────────────────────────────────────
 
@@ -105,7 +105,7 @@ def is_crisis(text: str) -> bool:
 
 # ── 6. Retrieval ──────────────────────────────────────────────────────────────
 
-def retrieve_chunks(question: str, top_k: int = 3) -> list[dict]:
+def retrieve_chunks(question: str, top_k: int = TOP_K_CHUNKS) -> list[dict]:
     """
     Embed the question and retrieve the top-k most similar chunks from Qdrant.
     Returns a list of dicts with keys: context, response, score.
@@ -185,8 +185,8 @@ def generate_answer(system_prompt: str, user_prompt: str) -> str:
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_prompt},
         ],
-        temperature=0.3,
-        max_tokens=800,
+        temperature=TEMPERATURE_GENERATION,
+        max_tokens=MAX_TOKENS_RESPONSE,
     )
     return response.choices[0].message.content
 
@@ -200,7 +200,7 @@ def mental_health_chatbot(question: str, emotion: str = None) -> str:
     if is_crisis(question):
         return CRISIS_RESPONSE
 
-    chunks = retrieve_chunks(question, top_k=3)
+    chunks = retrieve_chunks(question, top_k=TOP_K_CHUNKS)
     system_prompt, user_prompt = build_prompt(question, chunks, emotion=emotion)
     return generate_answer(system_prompt, user_prompt)
 

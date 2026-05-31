@@ -1,11 +1,9 @@
 import os
 import joblib
 
-CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-DEFAULT_MODEL_PATH = os.path.abspath(os.path.join(CURRENT_DIR, "..", "saved_models", "lang_detector.pkl"))
-
+from config import LANG_MODEL_PATH
 class LanguageDetector:
-    def __init__(self, model_path=DEFAULT_MODEL_PATH):
+    def __init__(self, model_path=LANG_MODEL_PATH):
         self.model_path = model_path
         self.model = None
         self.load_model()

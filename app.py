@@ -11,12 +11,18 @@ from src.emotion_classifier import EmotionClassifier
 from src.language_detector import LanguageDetector
 from src.intent_classifier import IntentClassifier
 from src.rag_pipeline import is_crisis, retrieve_chunks, build_prompt, CRISIS_RESPONSE
-
+from config import (
+    GROQ_MODEL,
+    GROQ_API_KEY,
+    EMOTION_CONFIDENCE_THRESHOLD,
+    TOP_K_CHUNKS,
+    MAX_TOKENS_TRANSLATION,
+    MAX_TOKENS_RESPONSE,
+    TEMPERATURE_TRANSLATION,
+    TEMPERATURE_GENERATION
+)
 import asyncio
 from groq import Groq
-from dotenv import load_dotenv
-
-load_dotenv()
 
 lang_detector = None
 emotion_detector = None
@@ -58,7 +64,7 @@ async def lifespan(app: FastAPI):
 
     # 4. Initialize Groq client for streaming
     # FIX: streaming is handled here directly instead of through a nonexistent class method
-    groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    groq_client = Groq(api_key=GROQ_API_KEY)
 
     yield
 
@@ -68,10 +74,6 @@ app = FastAPI(lifespan=lifespan)
 
 class QueryRequest(BaseModel):
     text: str
-
-
-GROQ_MODEL = "openai/gpt-oss-120b"
-
 
 @app.post("/chat")
 async def process_chat(request: QueryRequest):
@@ -88,8 +90,8 @@ async def process_chat(request: QueryRequest):
         translation = groq_client.chat.completions.create(
             model=GROQ_MODEL,
             messages=[{"role": "user", "content": translation_prompt}],
-            temperature=0.0,
-            max_tokens=200,
+            temperature=TEMPERATURE_TRANSLATION,
+            max_tokens=MAX_TOKENS_TRANSLATION,
         )
         retrieval_query = translation.choices[0].message.content.strip()
 
@@ -98,7 +100,7 @@ async def process_chat(request: QueryRequest):
     emotion_label = emotion_result["label"]
     emotion_score = emotion_result["score"]
 
-    if emotion_score < 0.6:
+    if emotion_score < EMOTION_CONFIDENCE_THRESHOLD:
         emotion_label = "uncertain"
         prompt_emotion = None  # LLM will infer emotion from context
     else:
@@ -145,7 +147,7 @@ async def process_chat(request: QueryRequest):
                 return
 
             # Retrieve chunks and build prompts (from rag_pipeline.py functions)
-            chunks = retrieve_chunks(retrieval_query, top_k=3)
+            chunks = retrieve_chunks(retrieval_query, top_k=TOP_K_CHUNKS)
             system_prompt, user_prompt = build_prompt(query, chunks, emotion=prompt_emotion)
 
             # Stream the Groq response token by token
@@ -156,8 +158,8 @@ async def process_chat(request: QueryRequest):
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},
                     ],
-                    temperature=0.3,
-                    max_tokens=800,
+                    temperature=TEMPERATURE_GENERATION,
+                    max_tokens=MAX_TOKENS_RESPONSE,
                     stream=True,  # FIX: enable streaming
                 )
                 for chunk in stream:

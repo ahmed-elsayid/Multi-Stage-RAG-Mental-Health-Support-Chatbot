@@ -2,16 +2,12 @@
 
 import os
 from groq import Groq
-from dotenv import load_dotenv
-
-load_dotenv()
-
+from config import INTENT_MODEL, GROQ_API_KEY, MAX_TOKENS_INTENT, TEMPERATURE_INTENT
 
 class IntentClassifier:
     def __init__(self):
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = GROQ_API_KEY
         self.client = Groq(api_key=api_key)
-        self.model_name = "llama-3.3-70b-versatile"
 
     def classify_intent(self, user_query: str):
         prompt = f"""
@@ -33,9 +29,9 @@ class IntentClassifier:
                     {"role": "system", "content": "You are an objective classification system."},
                     {"role": "user", "content": prompt}
                 ],
-                model=self.model_name,
-                max_tokens=10,
-                temperature=0.0
+                model=INTENT_MODEL,
+                temperature=TEMPERATURE_INTENT,
+                max_tokens=MAX_TOKENS_INTENT,
             )
             intent = response.choices[0].message.content.strip().lower()
             print(f"Intent classification response: '{intent}'")
