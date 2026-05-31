@@ -36,6 +36,7 @@ if __name__ == "__main__":
             "¿Cómo estás?",
             "Bonjour, comment ça va?",
             "Hallo, wie geht's dir?"
+            "احتاج إلى مساعدة؟"
         ]
         for text in test_texts:
             lang = detector.predict(text)

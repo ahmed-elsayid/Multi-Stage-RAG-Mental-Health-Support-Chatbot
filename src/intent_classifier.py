@@ -11,7 +11,7 @@ class IntentClassifier:
     def __init__(self):
         api_key = os.getenv("GROQ_API_KEY")
         self.client = Groq(api_key=api_key)
-        self.model_name = "llama-3.1-8b-instant"
+        self.model_name = "llama-3.3-70b-versatile"
 
     def classify_intent(self, user_query: str):
         prompt = f"""
@@ -38,6 +38,7 @@ class IntentClassifier:
                 temperature=0.0
             )
             intent = response.choices[0].message.content.strip().lower()
+            print(f"Intent classification response: '{intent}'")
             return intent
         except Exception as e:
             print(f"Error classifying intent: {e}")

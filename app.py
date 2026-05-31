@@ -70,7 +70,7 @@ class QueryRequest(BaseModel):
     text: str
 
 
-GROQ_MODEL = "llama-3.1-8b-instant"
+GROQ_MODEL = "openai/gpt-oss-120b"
 
 
 @app.post("/chat")
@@ -81,17 +81,32 @@ async def process_chat(request: QueryRequest):
 
     # Step 1: Detect Language
     language = lang_detector.predict(query)
+    # Translate query to English for retrieval if needed
+    retrieval_query = query
+    if language != "en":
+        translation_prompt = f"Translate the following text to English. Output ONLY the translation, nothing else:\n{query}"
+        translation = groq_client.chat.completions.create(
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": translation_prompt}],
+            temperature=0.0,
+            max_tokens=200,
+        )
+        retrieval_query = translation.choices[0].message.content.strip()
 
     # Step 2: Detect Emotion
-    emotion_result = emotion_detector.predict(query)
+    emotion_result = emotion_detector.predict(retrieval_query)
     emotion_label = emotion_result["label"]
     emotion_score = emotion_result["score"]
 
     if emotion_score < 0.6:
         emotion_label = "uncertain"
+        prompt_emotion = None  # LLM will infer emotion from context
+    else:
+        prompt_emotion = emotion_label
 
     # Step 3: Classify Intent
-    intent = intent_detector.classify_intent(query)
+    intent = intent_detector.classify_intent(retrieval_query)
+    print(f"Detected intent: {intent} | Detected emotion: {emotion_label} ({emotion_score:.3f}) | Detected language: {language}")
 
     async def response_generator():
         # Emit metadata first
@@ -125,13 +140,13 @@ async def process_chat(request: QueryRequest):
             yield json.dumps({"type": "chunk", "text": bot_response}) + "\n"
 
         else:
-            if is_crisis(query):
+            if is_crisis(retrieval_query):
                 yield json.dumps({"type": "chunk", "text": CRISIS_RESPONSE}) + "\n"
                 return
 
             # Retrieve chunks and build prompts (from rag_pipeline.py functions)
-            chunks = retrieve_chunks(query, top_k=3)
-            system_prompt, user_prompt = build_prompt(query, chunks, emotion=emotion_label)
+            chunks = retrieve_chunks(retrieval_query, top_k=3)
+            system_prompt, user_prompt = build_prompt(query, chunks, emotion=prompt_emotion)
 
             # Stream the Groq response token by token
             try:
