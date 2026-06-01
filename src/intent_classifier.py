@@ -5,10 +5,12 @@ from groq import Groq
 from config import INTENT_MODEL, GROQ_API_KEY, MAX_TOKENS_INTENT, TEMPERATURE_INTENT
 
 class IntentClassifier:
-    def __init__(self):
-        api_key = GROQ_API_KEY
-        self.client = Groq(api_key=api_key)
-
+    # FIX: Accept optional groq_client to share the connection pool
+    def __init__(self, groq_client=None):
+        if groq_client:
+            self.client = groq_client
+        else:
+            self.client = Groq(api_key=GROQ_API_KEY)
     def classify_intent(self, user_query: str):
         prompt = f"""
         Classify the user's input into exactly ONE of the following intents:

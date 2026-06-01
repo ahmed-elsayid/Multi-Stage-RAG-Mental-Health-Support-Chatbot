@@ -64,9 +64,12 @@ def _get_qdrant_client():
 
 _groq_client = None
 
-def _get_groq_client():
+# FIX: Allow sharing the global groq_client
+def _get_groq_client(groq_client=None):
     global _groq_client
-    if _groq_client is None:
+    if groq_client:
+        _groq_client = groq_client
+    elif _groq_client is None:
         if not GROQ_API_KEY:
             raise RuntimeError("GROQ_API_KEY must be set in .env")
         _groq_client = Groq(api_key=GROQ_API_KEY)

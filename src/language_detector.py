@@ -25,24 +25,21 @@ class LanguageDetector:
         return self.model.predict([text])[0]
 
 
+
 if __name__ == "__main__":
     try:
         detector = LanguageDetector()
-        detector.load_model()
         test_texts = [
             "can you help me with my anxiety?",
             "¿Cómo estás?",
             "Bonjour, comment ça va?",
             "Hallo, wie geht's dir?"
-            "احتاج إلى مساعدة؟"
         ]
         for text in test_texts:
             lang = detector.predict(text)
             print(f"Text: '{text}' -> Detected Language: '{lang}'")
     except Exception as e:
         print(f"Error during testing: {e}")
-
-
 
 
 

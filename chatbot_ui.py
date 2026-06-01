@@ -60,7 +60,7 @@ DISCLAIMER_ICON_SIZE  = 30   # Disclaimer tab — section heading icon
 TAB_ICON_SIZE         = 28   # Tab bar icons (CSS-injected via /app/static/)
 
 # ── Icon paths ────────────────────────────────────────────────────────────────
-ICON_DIR = Path("icons")
+ICON_DIR = Path("static")  # Now unified
 
 ICONS = {
     "hero":       ICON_DIR / "mental_health_support_icon.png",
@@ -580,12 +580,12 @@ def is_crisis_message(text: str) -> bool:
     return any(kw in text.lower() for kw in CRISIS_KEYWORDS)
 
 
-def demo_response(question: str) -> dict:
-    """Call the FastAPI multi-stage backend and return a unified result dict.
+# --- chatbot_ui.py (demo_response generator) ---
 
-    Returns keys: answer, is_crisis, route, retrieved_chunks,
-                  language, emotion, intent.
-    Falls back gracefully if the backend is unreachable.
+def demo_response(question: str):
+    """
+    Call the FastAPI multi-stage backend and YIELD chunks, metadata, and retrieved documents
+    in real-time. This prevents UI blocking.
     """
     try:
         resp = requests.post(
@@ -596,74 +596,26 @@ def demo_response(question: str) -> dict:
         )
         resp.raise_for_status()
 
-        language = "Unknown"
-        emotion  = "—"
-        intent   = "—"
-        answer_parts: list[str] = []
-        retrieved_chunks: list[dict] = []
-
         for raw_line in resp.iter_lines():
             if not raw_line:
                 continue
             try:
                 packet = json.loads(raw_line)
+                yield packet  # Yield every token/metadata packet immediately
             except (json.JSONDecodeError, ValueError):
                 continue
 
-            if packet.get("type") == "metadata":
-                lang_code = packet.get("detected_language", "")
-                language  = _LANG_NAMES.get(lang_code, lang_code or "Unknown")
-                emotion   = packet.get("detected_emotion", "—").capitalize()
-                raw_intent = packet.get("detected_intent", "—")
-                intent = {
-                    "asking_mental_health_question": "Mental Health Q",
-                    "out_of_scope": "Out of Scope",
-                    "greeting":     "Greeting",
-                    "goodbye":      "Goodbye",
-                    "gratitude":    "Gratitude",
-                }.get(raw_intent, raw_intent.replace("_", " ").title())
-            elif packet.get("type") == "chunks":
-                retrieved_chunks = packet.get("data", [])
-            elif packet.get("type") == "chunk":
-                answer_parts.append(packet.get("text", ""))
-
-        full_answer = "".join(answer_parts).strip()
-        crisis      = is_crisis_message(question)
-
-        if crisis:
-            route = "Crisis Safety"
-        elif intent in ("greeting", "goodbye", "gratitude", "out_of_scope"):
-            route = intent.replace("_", " ").title()
-        else:
-            route = "RAG Retrieval"
-
-        return {
-            "answer":           full_answer or "I'm here to help. Could you tell me more about what you're experiencing?",
-            "is_crisis":        crisis,
-            "route":            route,
-            "retrieved_chunks": retrieved_chunks,
-            "language":         language,
-            "emotion":          emotion,
-            "intent":           intent,
-        }
-
     except requests.exceptions.ConnectionError:
-        return {
-            "answer": (
+        yield {
+            "type": "error",
+            "text": (
                 "⚠️ **Backend not running.**\n\n"
                 "Please start the FastAPI server in a separate terminal:\n\n"
                 "```\nuvicorn app:app --reload\n```"
-            ),
-            "is_crisis": False, "route": "—", "retrieved_chunks": [],
-            "language": "—", "emotion": "—", "intent": "—",
+            )
         }
     except Exception as exc:
-        return {
-            "answer":    f"⚠️ An unexpected error occurred: {exc}",
-            "is_crisis": False, "route": "—", "retrieved_chunks": [],
-            "language": "—", "emotion": "—", "intent": "—",
-        }
-
+        yield {"type": "error", "text": f"⚠️ An unexpected error occurred: {exc}"}
 
 # ── 6. SESSION STATE ──────────────────────────────────────────────────────────
 
@@ -1010,27 +962,97 @@ def render_footer() -> None:
 
 # ── 8. TAB RENDERERS ─────────────────────────────────────────────────────────
 
+# --- chatbot_ui.py (_process_question engine) ---
+
 def _process_question(question: str) -> None:
-    """Validate, run demo logic, update state, rerun."""
     q = question.strip()
     if not q:
         st.warning("Please type a question before submitting.")
         return
-    result = demo_response(q)
+
+    language = "Unknown"
+    emotion = "—"
+    intent = "—"
+    full_answer = ""
+    retrieved_chunks = []
+    is_crisis = False
+
+    # 1. Set up real-time rendering containers
+    # (Shows the user their user bubble immediately during generation)
+    render_chat_message(role="user", text=q, timestamp=datetime.now().strftime("%I:%M %p"))
+
+    with st.chat_message("assistant"):
+        response_placeholder = st.empty()
+        metadata_placeholder = st.empty()
+
+        # 2. Iterate over our active generator stream
+        for packet in demo_response(q):
+            if packet.get("type") == "error":
+                full_text = packet.get("text", "")
+                response_placeholder.markdown(full_text)
+                return
+
+            elif packet.get("type") == "metadata":
+                lang_code = packet.get("detected_language", "")
+                language = _LANG_NAMES.get(lang_code, lang_code or "Unknown")
+                emotion = packet.get("detected_emotion", "—").capitalize()
+                raw_intent = packet.get("detected_intent", "—")
+
+                # Format score values nicely
+                score = packet.get("detected_emotion_score")
+                score_suffix = f" ({score:.2f})" if score is not None else ""
+
+                intent = {
+                    "asking_mental_health_question": "Mental Health Q",
+                    "out_of_scope": "Out of Scope",
+                    "greeting": "Greeting",
+                    "goodbye": "Goodbye",
+                    "gratitude": "Gratitude",
+                }.get(raw_intent, raw_intent.replace("_", " ").title())
+
+                # Render metadata panel dynamically
+                meta_info = f"🌍 Lang: {language.upper()} | 🎭 Emotion: {emotion}{score_suffix} | 🎯 Intent: {intent}"
+                metadata_placeholder.caption(meta_info)
+
+                # Dynamically push metadata updates to the right panel state
+                st.session_state.analysis = {
+                    "language": language,
+                    "emotion": f"{emotion}{score_suffix}",
+                    "intent": intent,
+                    "route": "Crisis Safety" if is_crisis else (
+                        "RAG Retrieval" if raw_intent == "asking_mental_health_question" else intent)
+                }
+
+            elif packet.get("type") == "chunks":
+                retrieved_chunks = packet.get("data", [])
+
+            elif packet.get("type") == "chunk":
+                chunk_text = packet.get("text", "")
+                full_answer += chunk_text
+
+                # Render markdown as it arrives
+                response_placeholder.markdown(full_answer)
+
+    # 3. Save finalized state to state history
+    is_crisis = is_crisis_message(q)
+    route = "Crisis Safety" if is_crisis else ("RAG Retrieval" if intent == "Mental Health Q" else intent)
+
     st.session_state.history.append({
         "question": q,
-        "result":   result,
-        "time":     datetime.now().strftime("%I:%M %p"),
+        "result": {
+            "answer": full_answer,
+            "is_crisis": is_crisis,
+            "route": route,
+            "retrieved_chunks": retrieved_chunks,
+            "language": language,
+            "emotion": emotion,
+            "intent": intent,
+        },
+        "time": datetime.now().strftime("%I:%M %p"),
     })
-    st.session_state.analysis = {
-        "language": result.get("language", "—"),
-        "emotion":  result.get("emotion",  "—"),
-        "intent":   result.get("intent",   "—"),
-        "route":    result["route"],
-    }
+
     st.session_state.prefill = ""
     st.rerun()
-
 
 def render_chat_tab() -> None:
     """Tab 1 — Home / Chat: hero, sample questions, input, analysis panel.

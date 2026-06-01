@@ -137,7 +137,7 @@ pip install -r requirements.txt
 ### Configure Environment Variables
 
 ```bash
-cp .env.example .env
+cp .env .env
 ```
 
 Fill in your credentials in `.env`:

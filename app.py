@@ -34,40 +34,43 @@ groq_client = None
 async def lifespan(app: FastAPI):
     global lang_detector, emotion_detector, intent_detector, groq_client
 
-    # 1. Load Language Detector with fallback
+    # 1. Load Language Detector
     try:
         lang_detector = LanguageDetector()
     except Exception as e:
         print(f"Language detector load failed, using mock: {e}")
         class MockLanguageDetector:
-            def predict(self, text: str) -> str:
-                return "en"
+            def predict(self, text: str) -> str: return "en"
         lang_detector = MockLanguageDetector()
 
-    # 2. Load Emotion Classifier with fallback
+    # 2. Load Emotion Classifier
     try:
         emotion_detector = EmotionClassifier()
     except Exception as e:
         print(f"Emotion classifier load failed, using mock: {e}")
         class MockEmotionClassifier:
-            def predict(self, text: str) -> dict:
-                return {"label": "neutral", "score": 1.0}
+            def predict(self, text: str) -> dict: return {"label": "neutral", "score": 1.0}
         emotion_detector = MockEmotionClassifier()
 
-    # 3. Load Intent Classifier
-    # FIX: was trying to instantiate a nonexistent RAGPipeline class alongside this
+    # 3. Create the shared Groq Client first
+    groq_client = Groq(api_key=GROQ_API_KEY)
+
+    # 4. Load Intent Classifier (Sharing client)
     try:
-        intent_detector = IntentClassifier()
+        intent_detector = IntentClassifier(groq_client=groq_client)
     except Exception as e:
         print(f"Intent classifier load failed: {e}")
         raise
 
-    # 4. Initialize Groq client for streaming
-    # FIX: streaming is handled here directly instead of through a nonexistent class method
-    groq_client = Groq(api_key=GROQ_API_KEY)
+    # 5. FIX: Pre-warm the RAG Pipeline's lazy-loaders (Embedding Model + Qdrant connection)
+    from src.rag_pipeline import _get_embedding_model, _get_qdrant_client, _get_groq_client
+    print("Pre-warming embedding model and database clients...")
+    _get_embedding_model()
+    _get_qdrant_client()
+    _get_groq_client(groq_client=groq_client) # Pass shared client
+    print("All models pre-warmed and ready.")
 
     yield
-
 
 app = FastAPI(lifespan=lifespan)
 

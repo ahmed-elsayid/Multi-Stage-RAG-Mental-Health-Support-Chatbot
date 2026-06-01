@@ -1,8 +1,8 @@
 import os
 import torch
 from transformers import pipeline, AutoTokenizer
-
 from config import EMOTION_MODEL_PATH
+
 class EmotionClassifier:
     def __init__(self):
         device = 0 if torch.cuda.is_available() else -1
