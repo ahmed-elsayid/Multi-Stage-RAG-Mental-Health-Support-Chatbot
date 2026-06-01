@@ -75,7 +75,7 @@ Multi-Stage-RAG-Mental-Health-Support-Chatbot/
 │
 ├── config.py                            ← centralized configuration
 ├── app.py                               ← FastAPI backend (POST /chat)
-├── ui_demo.py                           ← main Streamlit frontend (integrated)
+├── chatbot_ui.py                        ← main Streamlit frontend
 ├── ui.py                                ← original lightweight Streamlit UI
 ├── requirements.txt
 ├── .env.example
@@ -175,10 +175,10 @@ uvicorn app:app --reload
 ### Start Frontend
 
 ```bash
-streamlit run ui_demo.py
+streamlit run chatbot_ui.py
 ```
 
-> `ui_demo.py` is the main integrated frontend with the full analysis panel, retrieved context display, and polished UI. `ui.py` is the original lightweight version.
+> `chatbot_ui.py` is the main frontend with the full analysis panel, retrieved context display, and polished UI. `ui.py` is the original lightweight version.
 
 ---
 
