@@ -145,25 +145,28 @@ DEMO_CHUNKS = [
 # ── Pipeline steps (System Flow tab) ─────────────────────────────────────────
 PIPELINE_STEPS = [
     ("1", False, "User Question",
-    "Plain-language mental health question submitted through the interface."),     
+     "Plain-language mental health question submitted through the interface."),
     (None, False, "Language Detection",
      "Detects the input language — English, Arabic, and others. Module 1."),
+    (None, False, "Query Translation",
+     "Non-English queries are translated to English before retrieval using Groq gpt-oss-120b."),
     (None, False, "Emotion Classification",
      "Identifies emotional state: anxiety, sadness, stress, neutral. Module 2."),
     (None, False, "Intent Classification",
      "Classifies intent: mental health question, greeting, out-of-scope. Module 3."),
     (None, True,  "Crisis Safety Check",
      "Keyword check for crisis phrases — returns a direct safety message."),
-    ("6", False, "Qdrant Retrieval",
-    "Embeds the question and queries Qdrant Cloud for top-3 similar records. Module 4."),
-    ("7", False, "Groq LLM",
-    "Builds a grounded prompt and calls Groq openai/gpt-oss-20b (temperature 0.3)."),
-    ("8", False, "Final Answer",
-    "Empathetic, grounded answer returned with language, emotion, intent, and route."),
+    ("7", False, "Qdrant Retrieval",
+     "Embeds the translated query and queries Qdrant Cloud for top-3 similar records. Module 4."),
+    ("8", False, "Groq LLM",
+     "Builds a grounded prompt and calls Groq openai/gpt-oss-120b (temperature 0.3)."),
+    ("9", False, "Final Answer",
+     "Empathetic, grounded answer returned in the user's original language."),
 ]
 
 PIPELINE_STEP_ICONS = {
     "Language Detection":     ICONS["language"],
+    "Query Translation":      ICONS["language"],   # reuse language icon
     "Emotion Classification": ICONS["emotion"],
     "Intent Classification":  ICONS["intent"],
     "Crisis Safety Check":    ICONS["help"],
@@ -347,6 +350,11 @@ label[data-testid="stWidgetLabel"] {{
 .stTabs [data-baseweb="tab"]:nth-of-type(3)
     [data-testid="stMarkdownContainer"] p::before {{
     background-image: url("/app/static/disclaimer_icon.png");
+}}
+
+.stTabs [data-baseweb="tab"]:nth-of-type(4)
+    [data-testid="stMarkdownContainer"] p::before {{
+    background-image: url("/app/static/team_icon.png");
 }}
 
 /* ── Cards (st.container border=True) ── */
@@ -647,36 +655,80 @@ def safe_image(path: Path, width: int = 40, fallback: str = "") -> None:
         st.markdown(fallback)
 
 
-def render_banner() -> None:
-    """Top red banner: ITI logo (via /app/static/) and title.
-    No phone, email, or official ITI contact details."""
-    st.markdown("""
-<div style="
-    background: #9B1C1F;
-    padding: 1rem 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    border-bottom: 3px solid #7B1618;
-    margin: 0;
-">
-    <div style="display:flex; align-items:center; gap:14px;">
-        <img src="/app/static/ITI.svg"
-             alt="ITI"
-             style="height:44px; filter:brightness(0) invert(1);"
+def render_about_us_tab() -> None:
+    st.write("")
+
+    st.markdown(f"""
+<div style="text-align:center; margin-bottom:2rem;">
+    <div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:0.4rem;">
+        <img src="/app/static/team_icon.png" alt=""
+             style="height:36px; width:36px; object-fit:contain;"
              onerror="this.style.display='none'">
-        <div>
-            <div style="color:white; font-size:0.9rem; font-weight:700; letter-spacing:0.3px;">
-                NLP Final Task 2026
-            </div>
-            <div style="color:rgba(255,255,255,0.6); font-size:0.7rem; letter-spacing:0.2px;">
-                ITI Student Demo Project
-            </div>
-        </div>
+        <div style="color:{RED}; font-size:1.6rem; font-weight:700;">Meet the Team</div>
     </div>
+    <div style="color:{MUTED}; font-size:0.9rem;">ITI Students · NLP Final Task 2026</div>
 </div>
 """, unsafe_allow_html=True)
 
+    col1, col2, col3, col4 = st.columns(4, gap="large")
+
+    team = [
+        ("Ahmed elsayed",  "Language Detection\nEmotion Classifier"),
+        ("Isra Omera",   "Intent Classifier\n integration"),
+        ("Yousef sabra", "Backend & API\nDeployment"),
+        ("Zahy gendy",   "Frontend & UI\nRAG Pipeline"),
+    ]
+
+    for col, (name, role) in zip([col1, col2, col3, col4], team):
+        with col:
+            initials = name[0].upper()
+            st.markdown(f"""
+<div style="
+    background:white;
+    border:0.5px solid #E8ECF0;
+    border-radius:16px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.05);
+    padding:1.75rem 1rem;
+    text-align:center;
+">
+    <div style="
+        width:64px; height:64px;
+        border-radius:50%;
+        background:{RED};
+        color:white;
+        font-size:1.6rem;
+        font-weight:700;
+        font-family:Georgia,serif;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        margin:0 auto 1rem auto;
+    ">{initials}</div>
+    <div style="color:{NAVY}; font-size:1rem; font-weight:700; margin-bottom:0.4rem;">{name}</div>
+    <div style="color:{MUTED}; font-size:0.78rem; line-height:1.7;">{role.replace(chr(10), '<br>')}</div>
+</div>
+""", unsafe_allow_html=True)
+
+def render_banner() -> None:
+    st.markdown(f"""
+<div style="background:#9B1C1F; padding:0.75rem 2rem; display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #7B1618; margin:0;">
+    <div style="display:flex; align-items:center; gap:14px;">
+        <img src="/app/static/ITI.svg" alt="ITI" style="height:40px; filter:brightness(0) invert(1);" onerror="this.style.display='none'">
+        <div>
+            <div style="color:white; font-size:0.9rem; font-weight:700; letter-spacing:0.3px;">NLP Final Task 2026</div>
+            <div style="color:rgba(255,255,255,0.6); font-size:0.7rem; letter-spacing:0.2px;">ITI Student Demo Project</div>
+        </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:4px;">
+        <img src="/app/static/{ICONS['hero'].name}" alt=""
+             style="height:38px; width:38px; object-fit:contain; filter:brightness(15); mix-blend-mode:screen;"
+             onerror="this.style.display='none'">
+        <span style="font-size:26px; font-weight:700; color:white; letter-spacing:-1px; font-family:Georgia,serif;">RAG</span>
+        <span style="width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.7); display:inline-block; margin-bottom:3px;"></span>
+        <span style="font-size:26px; font-weight:300; color:rgba(255,255,255,0.85); letter-spacing:-1px; font-family:Georgia,serif;">ab</span>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 def render_analysis_card(label: str, value: str, icon_key: str) -> None:
     """Analysis card: PNG icon on the left, label + value on the right."""
     icon_name = ICONS[icon_key].name
@@ -1075,25 +1127,28 @@ def render_chat_tab() -> None:
         # Inner content area for hero
         hero_pad_l, hero_area, hero_pad_r = st.columns([0.03, 0.94, 0.03], gap="small")
 
-        with hero_area:
-            ic_col, ti_col = st.columns([0.14, 0.86], gap="medium")
-
-            with ic_col:
-                safe_image(ICONS["hero"], width=HERO_ICON_SIZE, fallback="❤️‍🩹")
-
-            with ti_col:
-                st.markdown(
-                    f"<h2 style='color:{TEXT}; margin:0 0 0.25rem 0; padding:0;'>"
-                    "Mental Health Support Chatbot</h2>",
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    "<div style='color:#475467; font-size:0.93rem; line-height:1.55;"
-                    " margin-top:0.1rem;'>"
-                    "Grounded, empathetic, and context-aware support for anxiety, "
-                    "depression, stress, and coping questions.</div>",
-                    unsafe_allow_html=True,
-                )
+        # with hero_area:
+        #     ic_col, ti_col = st.columns([0.14, 0.86], gap="medium")
+        #
+        #     with ic_col:
+        #         safe_image(ICONS["hero"], width=HERO_ICON_SIZE, fallback="❤️‍🩹")
+        #
+        #     # with ti_col:
+            #     st.markdown(
+            #         f"""
+            #         <div style='display:flex; align-items:center; gap:5px; margin:0 0 0.25rem 0;'>
+            #             <span style='font-size:32px; font-weight:700; color:#9B1C1F; letter-spacing:-1px; font-family: Georgia, serif;'>RAG</span>
+            #             <span style='font-size:32px; font-weight:300; color:#173847; letter-spacing:-1px; font-family: Georgia, serif;'>ab</span>
+            #         </div>
+            #         """,
+            #         unsafe_allow_html=True,
+            #     )
+            #     st.markdown(
+            #         "<div style='color:#475467; font-size:0.93rem; line-height:1.55; margin-top:0.1rem;'>"
+            #         "Grounded, empathetic, and context-aware support for anxiety, "
+            #         "depression, stress, and coping questions.</div>",
+            #         unsafe_allow_html=True,
+            #     )
 
         st.markdown("<div style='margin-top:0rem;'></div>", unsafe_allow_html=True)
 
@@ -1162,7 +1217,7 @@ def render_chat_tab() -> None:
 
             st.markdown("<div style='margin-top:1.1rem;'></div>", unsafe_allow_html=True)
             st.markdown('<div class="chat-label">Chat</div>', unsafe_allow_html=True)
-            render_chat_history()            
+            render_chat_history()
 
     # ── RIGHT: analysis panel ────────────────────────────────────────────────
     with col_right:
@@ -1469,10 +1524,11 @@ def main() -> None:
     initialize_state()
     render_banner()
 
-    tab_chat, tab_flow, tab_disc = st.tabs([
+    tab_chat, tab_flow, tab_disc, tab_team = st.tabs([
         "Home / Chat",
         "System Flow",
         "Disclaimer",
+        "About Us",
     ])
 
     with tab_chat:
@@ -1483,6 +1539,9 @@ def main() -> None:
 
     with tab_disc:
         render_disclaimer_tab()
+
+    with tab_team:
+        render_about_us_tab()
 
     render_footer()
 
