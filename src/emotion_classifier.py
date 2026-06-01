@@ -1,16 +1,20 @@
-import os  # FIX: Added missing import
+import os
 import torch
-from transformers import pipeline
+from transformers import pipeline, AutoTokenizer
 
 from config import EMOTION_MODEL_PATH
 class EmotionClassifier:
     def __init__(self):
-        # Choose GPU if available, fallback to CPU
         device = 0 if torch.cuda.is_available() else -1
+        tokenizer = AutoTokenizer.from_pretrained(EMOTION_MODEL_PATH)
+        # DistilBERT does not accept token_type_ids — remove it from tokenizer output
+        tokenizer.model_input_names = [
+            n for n in tokenizer.model_input_names if n != "token_type_ids"
+        ]
         self.classifier = pipeline(
             "text-classification",
             model=EMOTION_MODEL_PATH,
-            tokenizer=EMOTION_MODEL_PATH,
+            tokenizer=tokenizer,
             device=device,
             truncation=True,
             max_length=512

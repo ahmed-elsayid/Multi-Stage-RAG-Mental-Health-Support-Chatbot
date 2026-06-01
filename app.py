@@ -150,6 +150,9 @@ async def process_chat(request: QueryRequest):
             chunks = retrieve_chunks(retrieval_query, top_k=TOP_K_CHUNKS)
             system_prompt, user_prompt = build_prompt(query, chunks, emotion=prompt_emotion)
 
+            # Emit retrieved chunks so the UI can display sources
+            yield json.dumps({"type": "chunks", "data": chunks}) + "\n"
+
             # Stream the Groq response token by token
             try:
                 stream = groq_client.chat.completions.create(
