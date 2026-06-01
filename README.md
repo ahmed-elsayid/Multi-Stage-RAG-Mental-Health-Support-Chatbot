@@ -75,7 +75,8 @@ Multi-Stage-RAG-Mental-Health-Support-Chatbot/
 │
 ├── config.py                            ← centralized configuration
 ├── app.py                               ← FastAPI backend (POST /chat)
-├── ui.py                                ← Streamlit frontend
+├── ui_demo.py                           ← main Streamlit frontend (integrated)
+├── ui.py                                ← original lightweight Streamlit UI
 ├── requirements.txt
 ├── .env.example
 ├── .gitignore
@@ -174,8 +175,10 @@ uvicorn app:app --reload
 ### Start Frontend
 
 ```bash
-streamlit run ui.py
+streamlit run ui_demo.py
 ```
+
+> `ui_demo.py` is the main integrated frontend with the full analysis panel, retrieved context display, and polished UI. `ui.py` is the original lightweight version.
 
 ---
 
@@ -206,6 +209,7 @@ curl -X POST http://127.0.0.1:8000/chat \
 Response is streamed as NDJSON:
 ```json
 {"type": "metadata", "detected_language": "en", "detected_emotion": "fear", "detected_emotion_score": 0.91, "detected_intent": "asking_mental_health_question"}
+{"type": "chunks", "data": [{"context": "...", "response": "...", "score": 0.91}, ...]}
 {"type": "chunk", "text": "It sounds like you're dealing with..."}
 {"type": "chunk", "text": " persistent anxiety..."}
 ```
