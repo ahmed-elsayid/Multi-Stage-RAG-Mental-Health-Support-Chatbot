@@ -20,13 +20,15 @@ TOP_K_CHUNKS       = 3
 
 # ── Emotion Classifier ────────────────────────────────────────────────────────
 EMOTION_MODEL_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "saved_models", "emotion_distilbert_finetuned")
+    os.path.join(os.path.dirname(__file__), "trained_models",
+                 "emotion_distilbert_finetuned-20260601T044759Z-3-001",
+                 "emotion_distilbert_finetuned")
 )
 EMOTION_CONFIDENCE_THRESHOLD = 0.6           # below this → LLM infers emotion
 
 # ── Language Detector ─────────────────────────────────────────────────────────
 LANG_MODEL_PATH = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "saved_models", "lang_detector.pkl")
+    os.path.join(os.path.dirname(__file__), "trained_models", "lang_detector.pkl")
 )
 
 # ── Generation ────────────────────────────────────────────────────────────────

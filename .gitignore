@@ -1,21 +1,16 @@
-# Environment
 .env
 .venv/
-venv/
-
-# Python cache
 __pycache__/
 *.pyc
-*.pyo
 
-# Jupyter
-.ipynb_checkpoints/
+.venv/
+__pycache__/
+.env
+*.pyc
+trained_models/
+memory/
 
-# Model and embedding cache
-.cache/
-*.bin
-*.pt
 
-# OS
-.DS_Store
-Thumbs.db
+Extras/
+Final Task 2026.pdf
+
