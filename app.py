@@ -1,16 +1,17 @@
-# --- app.py ---
-
 import os
 import json
+import asyncio
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
+from groq import Groq
 
-from src.emotion_classifier import EmotionClassifier
-from src.language_detector import LanguageDetector
+from src.emotion_classifier import EmotionClassifier, MockEmotionClassifier
+from src.language_detector import LanguageDetector, MockLanguageDetector
 from src.intent_classifier import IntentClassifier
 from src.rag_pipeline import is_crisis, retrieve_chunks, build_prompt, CRISIS_RESPONSE
+from src import rag_pipeline
 from config import (
     GROQ_MODEL,
     GROQ_API_KEY,
@@ -21,8 +22,6 @@ from config import (
     TEMPERATURE_TRANSLATION,
     TEMPERATURE_GENERATION
 )
-import asyncio
-from groq import Groq
 
 lang_detector = None
 emotion_detector = None
@@ -38,39 +37,31 @@ async def lifespan(app: FastAPI):
     try:
         lang_detector = LanguageDetector()
     except Exception as e:
-        print(f"Language detector load failed, using mock: {e}")
-        class MockLanguageDetector:
-            def predict(self, text: str) -> str: return "en"
+        print(f"Failed to load language detector, falling back to mock: {e}")
         lang_detector = MockLanguageDetector()
 
     # 2. Load Emotion Classifier
     try:
         emotion_detector = EmotionClassifier()
     except Exception as e:
-        print(f"Emotion classifier load failed, using mock: {e}")
-        class MockEmotionClassifier:
-            def predict(self, text: str) -> dict: return {"label": "neutral", "score": 1.0}
+        print(f"Failed to load emotion classifier, falling back to mock: {e}")
         emotion_detector = MockEmotionClassifier()
 
-    # 3. Create the shared Groq Client first
+    # 3. Create global shared Groq client
     groq_client = Groq(api_key=GROQ_API_KEY)
 
-    # 4. Load Intent Classifier (Sharing client)
+    # 4. Load Intent Classifier with shared client
     try:
         intent_detector = IntentClassifier(groq_client=groq_client)
     except Exception as e:
         print(f"Intent classifier load failed: {e}")
         raise
 
-    # 5. FIX: Pre-warm the RAG Pipeline's lazy-loaders (Embedding Model + Qdrant connection)
-    from src.rag_pipeline import _get_embedding_model, _get_qdrant_client, _get_groq_client
-    print("Pre-warming embedding model and database clients...")
-    _get_embedding_model()
-    _get_qdrant_client()
-    _get_groq_client(groq_client=groq_client) # Pass shared client
-    print("All models pre-warmed and ready.")
+    # 5. Share global client reference with the RAG pipeline module
+    rag_pipeline.groq_client = groq_client
 
     yield
+
 
 app = FastAPI(lifespan=lifespan)
 
@@ -78,16 +69,16 @@ app = FastAPI(lifespan=lifespan)
 class QueryRequest(BaseModel):
     text: str
 
+
 @app.post("/chat")
 async def process_chat(request: QueryRequest):
     query = request.text
     if not query.strip():
         raise HTTPException(status_code=400, detail="Text query cannot be empty.")
 
-    # Step 1: Detect Language
     language = lang_detector.predict(query)
-    # Translate query to English for retrieval if needed
     retrieval_query = query
+
     if language != "en":
         translation_prompt = f"Translate the following text to English. Output ONLY the translation, nothing else:\n{query}"
         translation = groq_client.chat.completions.create(
@@ -98,23 +89,19 @@ async def process_chat(request: QueryRequest):
         )
         retrieval_query = translation.choices[0].message.content.strip()
 
-    # Step 2: Detect Emotion
     emotion_result = emotion_detector.predict(retrieval_query)
     emotion_label = emotion_result["label"]
     emotion_score = emotion_result["score"]
 
     if emotion_score < EMOTION_CONFIDENCE_THRESHOLD:
         emotion_label = "uncertain"
-        prompt_emotion = None  # LLM will infer emotion from context
+        prompt_emotion = None
     else:
         prompt_emotion = emotion_label
 
-    # Step 3: Classify Intent
     intent = intent_detector.classify_intent(retrieval_query)
-    print(f"Detected intent: {intent} | Detected emotion: {emotion_label} ({emotion_score:.3f}) | Detected language: {language}")
 
     async def response_generator():
-        # Emit metadata first
         metadata = {
             "type": "metadata",
             "detected_language": language,
@@ -124,7 +111,6 @@ async def process_chat(request: QueryRequest):
         }
         yield json.dumps(metadata) + "\n"
 
-        # Route based on intent
         if intent == "greeting":
             bot_response = "Hello! I am your supportive assistant. How are you feeling today?"
             yield json.dumps({"type": "chunk", "text": bot_response}) + "\n"
@@ -149,14 +135,11 @@ async def process_chat(request: QueryRequest):
                 yield json.dumps({"type": "chunk", "text": CRISIS_RESPONSE}) + "\n"
                 return
 
-            # Retrieve chunks and build prompts (from rag_pipeline.py functions)
             chunks = retrieve_chunks(retrieval_query, top_k=TOP_K_CHUNKS)
             system_prompt, user_prompt = build_prompt(query, chunks, emotion=prompt_emotion)
 
-            # Emit retrieved chunks so the UI can display sources
             yield json.dumps({"type": "chunks", "data": chunks}) + "\n"
 
-            # Stream the Groq response token by token
             try:
                 stream = groq_client.chat.completions.create(
                     model=GROQ_MODEL,
@@ -166,13 +149,13 @@ async def process_chat(request: QueryRequest):
                     ],
                     temperature=TEMPERATURE_GENERATION,
                     max_tokens=MAX_TOKENS_RESPONSE,
-                    stream=True,  # FIX: enable streaming
+                    stream=True,
                 )
                 for chunk in stream:
                     delta = chunk.choices[0].delta.content
                     if delta:
                         yield json.dumps({"type": "chunk", "text": delta}) + "\n"
-                        await asyncio.sleep(0)  # yield control to the event loop between chunks
+                        await asyncio.sleep(0)
             except Exception as e:
                 yield json.dumps({"type": "chunk", "text": f"Error generating response: {e}"}) + "\n"
 

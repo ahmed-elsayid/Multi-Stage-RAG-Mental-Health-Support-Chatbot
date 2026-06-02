@@ -1,20 +1,15 @@
 import os
 import torch
-from transformers import pipeline, AutoTokenizer
+from transformers import pipeline
 from config import EMOTION_MODEL_PATH
 
 class EmotionClassifier:
     def __init__(self):
         device = 0 if torch.cuda.is_available() else -1
-        tokenizer = AutoTokenizer.from_pretrained(EMOTION_MODEL_PATH)
-        # DistilBERT does not accept token_type_ids — remove it from tokenizer output
-        tokenizer.model_input_names = [
-            n for n in tokenizer.model_input_names if n != "token_type_ids"
-        ]
         self.classifier = pipeline(
             "text-classification",
             model=EMOTION_MODEL_PATH,
-            tokenizer=tokenizer,
+            tokenizer=EMOTION_MODEL_PATH,
             device=device,
             truncation=True,
             max_length=512
@@ -31,7 +26,11 @@ class EmotionClassifier:
         }
 
 
-# --- Test ---
+class MockEmotionClassifier:
+    def predict(self, text: str) -> dict:
+        return {"label": "neutral", "score": 1.0}
+
+
 if __name__ == "__main__":
     hard_tests = {
         "I guess I'm fine. Really. Totally fine.": "sadness",
@@ -55,4 +54,4 @@ if __name__ == "__main__":
             confidence = prediction["score"]
             print(f"Text: '{text}' | Predicted: {predicted_emotion} ({confidence:.2f}) | Expected: {expected_emotion}")
     except Exception as e:
-        print(f"Error loading model from {EMOTION_MODEL_PATH}: {e}")
+        print(f"Error loading model: {e}")

@@ -1,7 +1,7 @@
 import os
 import joblib
-
 from config import LANG_MODEL_PATH
+
 class LanguageDetector:
     def __init__(self, model_path=LANG_MODEL_PATH):
         self.model_path = model_path
@@ -12,11 +12,9 @@ class LanguageDetector:
         if not os.path.exists(self.model_path):
             raise FileNotFoundError(
                 f"Language model file not found at: {self.model_path}. "
-                "Please place the saved 'lang_detector.pkl' file inside the 'saved_models/' directory."
+                "Please verify the model is placed in the correct directory."
             )
         self.model = joblib.load(self.model_path)
-        print(f"Language model loaded successfully from: {self.model_path}")
-
 
 
     def predict(self, text: str) -> str:
@@ -24,6 +22,10 @@ class LanguageDetector:
             raise RuntimeError("Model is not loaded. Cannot run inference.")
         return self.model.predict([text])[0]
 
+
+class MockLanguageDetector:
+    def predict(self, text: str) -> str:
+        return "en"
 
 
 if __name__ == "__main__":
@@ -40,7 +42,3 @@ if __name__ == "__main__":
             print(f"Text: '{text}' -> Detected Language: '{lang}'")
     except Exception as e:
         print(f"Error during testing: {e}")
-
-
-
-

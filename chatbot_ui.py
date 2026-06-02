@@ -4,14 +4,14 @@ Multi-Stage RAG Mental Health Support Chatbot — Streamlit frontend.
 
 Safe HTML rules:
   - CSS lives in one CSS constant, injected by load_css().
-  - The banner and styled cards use standalone HTML blocks (pure text + static
-    images via /app/static/). No Streamlit widgets live inside HTML blocks.
+  - The banner and styled cards use standalone HTML blocks (pure text + static/img
+    images via /app/static/img/). No Streamlit widgets live inside HTML blocks.
   - All layout, buttons, and chat use native Streamlit widgets.
   - Icons loaded via st.image() / safe_image() — never base64 or inline SVG.
 
 Icon-loading rule:
   - Streamlit widgets  →  icons/ folder  (safe_image / st.image)
-  - HTML blocks        →  /app/static/  (every HTML icon is mirrored there)
+  - HTML blocks        →  /app/static/img/  (every HTML icon is mirrored there)
 
 Backend:
   - Requires FastAPI backend running at http://localhost:8000
@@ -57,10 +57,10 @@ HELP_ICON_SIZE       = 36    # "Need Immediate Help?" warning icon
 SYSTEM_HEAD_ICON_SIZE = 30   # System Flow tab — section heading icon
 SYSTEM_STEP_ICON_SIZE = 32   # System Flow tab — per-step pipeline icons
 DISCLAIMER_ICON_SIZE  = 30   # Disclaimer tab — section heading icon
-TAB_ICON_SIZE         = 28   # Tab bar icons (CSS-injected via /app/static/)
+TAB_ICON_SIZE         = 28   # Tab bar icons (CSS-injected via /app/static/img/)
 
 # ── Icon paths ────────────────────────────────────────────────────────────────
-ICON_DIR = Path("static")  # Now unified
+ICON_DIR = Path("static/img")  # Now unified
 
 ICONS = {
     "hero":       ICON_DIR / "mental_health_support_icon.png",
@@ -75,11 +75,28 @@ ICONS = {
 }
 
 # ── Sample questions ──────────────────────────────────────────────────────────
+# Multi-lingual sample questions mapping language tags and clinical topics
 SAMPLE_QUESTIONS = [
-    "I feel anxious all the time",
-    "I feel very stressed",
-    "I feel depressed and unmotivated",
-    "I cannot sleep, I keep overthinking",
+    {
+        "text": "I feel anxious and overwhelmed all the time",
+        "label": "Anxiety & Stress",
+        "tag": "🇺🇸 English"
+    },
+    {
+        "text": "أشعر بالقلق والتوتر الشديد طوال الوقت",
+        "label": "القلق والتوتر",
+        "tag": "🇸🇦 العربية"
+    },
+    {
+        "text": "Me siento muy deprimido y sin motivación",
+        "label": "Depresión y Ánimo",
+        "tag": "🇪🇸 Español"
+    },
+    {
+        "text": "Je n'arrive pas à dormir, je rumine trop",
+        "label": "Insomnie et Sommeil",
+        "tag": "🇫🇷 Français"
+    }
 ]
 
 # ── Demo answers ──────────────────────────────────────────────────────────────
@@ -174,401 +191,17 @@ PIPELINE_STEP_ICONS = {
 
 # ── 4. CSS ────────────────────────────────────────────────────────────────────
 
-CSS = f"""
-<style>
+from pathlib import Path
+import streamlit as st
 
-html, body, [class*="css"] {{
-    font-family: 'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif;
-}}
-#MainMenu, footer, header, .stDeployButton {{ visibility:hidden; display:none; }}
-.stApp {{ background-color: {BG}; }}
-.block-container {{
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
-    max-width: 1500px !important;
-    width: 92vw !important;
-    padding-left: 2rem !important;
-    padding-right: 2rem !important;
-}}
+CSS_FILE = Path("static/css/style.css")
 
-/* ── Buttons: default white pill ── */
-.stButton > button {{
-    background-color: white !important;
-    color: #344054 !important;
-    border: 1.5px solid #D0D5DD !important;
-    border-radius: 20px !important;
-    font-weight: 500 !important;
-    font-size: 0.84rem !important;
-    padding: 0.45rem 1rem !important;
-    box-shadow: 0 1px 2px rgba(16,24,40,0.05) !important;
-    transition: all 0.15s !important;
-}}
-.stButton > button:hover {{
-    border-color: {RED} !important;
-    color: {RED} !important;
-    background-color: #FFF7F7 !important;
-}}
-
-/* ── Buttons: primary burgundy ── */
-.stButton > button[kind="primary"] {{
-    background-color: {RED} !important;
-    color: white !important;
-    border: none !important;
-    border-radius: 10px !important;
-    font-weight: 700 !important;
-    font-size: 0.9rem !important;
-    padding: 0.65rem 1.5rem !important;
-    box-shadow: 0 3px 10px rgba(155,28,31,0.28) !important;
-}}
-.stButton > button[kind="primary"]:hover {{
-    background-color: #7f1518 !important;
-    color: white !important;
-    border-color: transparent !important;
-}}
-
-/* ── Text area ── */
-
-/* Main Streamlit text-area wrapper */
-.stTextArea {{
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
-}}
-
-/* BaseWeb wrapper — this is usually where the black border comes from */
-.stTextArea div[data-baseweb="textarea"],
-.stTextArea div[data-baseweb="base-input"] {{
-    border: 1.5px solid #D0D5DD !important;
-    border-radius: 12px !important;
-    background-color: white !important;
-    box-shadow: none !important;
-    outline: none !important;
-}}
-
-/* Any inner wrapper inside the BaseWeb textarea */
-.stTextArea div[data-baseweb="textarea"] > div,
-.stTextArea div[data-baseweb="base-input"] > div {{
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
-    background-color: white !important;
-}}
-
-/* Actual textarea */
-.stTextArea textarea {{
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-    background-color: white !important;
-    color: {TEXT} !important;
-    border-radius: 12px !important;
-    font-size: 0.91rem !important;
-    line-height: 1.6 !important;
-    resize: none !important;
-    padding: 0.85rem 1rem !important;
-    box-sizing: border-box !important;
-}}
-
-/* Focus state — burgundy, not black */
-.stTextArea:focus-within div[data-baseweb="textarea"],
-.stTextArea:focus-within div[data-baseweb="base-input"] {{
-    border: 1.5px solid {RED} !important;
-    box-shadow: 0 0 0 3px rgba(155,28,31,0.10) !important;
-    outline: none !important;
-}}
-
-/* Remove browser black focus ring */
-.stTextArea textarea:focus,
-.stTextArea textarea:focus-visible,
-.stTextArea div:focus,
-.stTextArea div:focus-visible {{
-    border: none !important;
-    outline: none !important;
-    box-shadow: none !important;
-}}
-
-.stTextArea textarea::placeholder {{
-    color: #A8B0BC !important;
-}}
-
-label[data-testid="stWidgetLabel"] {{
-    display: none !important;
-}}
-
-/* ── Tabs ── */
-.stTabs [data-baseweb="tab-list"] {{
-    background-color: white !important;
-    border-bottom: 1.5px solid {BORDER} !important;
-    padding: 0 2rem !important;
-    gap: 0.4rem !important;
-    border-radius: 0 !important;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06) !important;
-    justify-content: flex-end !important;
-}}
-.stTabs [data-baseweb="tab"] {{
-    color: {MUTED} !important;
-    font-size: 0.88rem !important;
-    font-weight: 500 !important;
-    padding: 0.9rem 1.7rem !important;
-    border-bottom: 2.5px solid transparent !important;
-    background: transparent !important;
-}}
-.stTabs [aria-selected="true"] {{
-    color: {RED} !important;
-    font-weight: 700 !important;
-    border-bottom: 2.5px solid {RED} !important;
-}}
-.stTabs [data-baseweb="tab-highlight"] {{
-    background-color: {RED} !important;
-    height: 2.5px !important;
-}}
-.stTabs [data-baseweb="tab-panel"] {{
-    background-color: {BG} !important;
-    padding-top: 0 !important;
-}}
-
-/* ── Tab icons via CSS ::before (PNGs from /app/static/) ── */
-.stTabs [data-baseweb="tab"] [data-testid="stMarkdownContainer"] p::before {{
-    content: "";
-    display: inline-block;
-    width: {TAB_ICON_SIZE}px;
-    height: {TAB_ICON_SIZE}px;
-    margin-right: 10px;
-    vertical-align: -8px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-}}
-.stTabs [data-baseweb="tab"]:nth-of-type(1)
-    [data-testid="stMarkdownContainer"] p::before {{
-    background-image: url("/app/static/home_icon.png");
-}}
-.stTabs [data-baseweb="tab"]:nth-of-type(2)
-    [data-testid="stMarkdownContainer"] p::before {{
-    background-image: url("/app/static/system_icon.png");
-}}
-.stTabs [data-baseweb="tab"]:nth-of-type(3)
-    [data-testid="stMarkdownContainer"] p::before {{
-    background-image: url("/app/static/disclaimer_icon.png");
-}}
-
-.stTabs [data-baseweb="tab"]:nth-of-type(4)
-    [data-testid="stMarkdownContainer"] p::before {{
-    background-image: url("/app/static/team_icon.png");
-}}
-
-/* ── Cards (st.container border=True) ── */
-[data-testid="stVerticalBlockBorderWrapper"] {{
-    border-radius: 14px !important;
-    border-color: #E8ECF0 !important;
-    background-color: white !important;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.05) !important;
-}}
-
-/* ── Sample question chips ── */
-.st-key-s0 .stButton > button,
-.st-key-s1 .stButton > button,
-.st-key-s2 .stButton > button,
-.st-key-s3 .stButton > button {{
-    background-color: white !important;
-    color: {NAVY} !important;
-    border: 1.5px solid {RED} !important;
-    border-radius: 30px !important;
-    font-weight: 500 !important;
-    font-size: 0.82rem !important;
-    padding: 0.4rem 1rem !important;
-    min-height: 40px !important;
-    margin-bottom: 0.55rem !important;
-    box-shadow: 0 1px 3px rgba(155,28,31,0.08) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}}
-.st-key-s0 .stButton > button:hover,
-.st-key-s1 .stButton > button:hover,
-.st-key-s2 .stButton > button:hover,
-.st-key-s3 .stButton > button:hover {{
-    background-color: #FBECEC !important;
-    color: {RED} !important;
-    border: 2px solid {RED} !important;
-    box-shadow: 0 2px 6px rgba(155,28,31,0.18) !important;
-}}
-
-/* ── Custom chat messages ── */
-.chat-empty {{
-    background: white;
-    border: 1px solid #E8ECF0;
-    border-radius: 10px;
-    color: {MUTED};
-    font-size: 0.86rem;
-    padding: 0.9rem 1rem;
-    margin-top: 0.7rem;
-}}
-
-.chat-row {{
-    display: flex;
-    align-items: flex-start;
-    gap: 14px;
-    margin: 0.75rem 0;
-}}
-
-.chat-avatar {{
-    width: 42px;
-    height: 42px;
-    min-width: 42px;
-    border-radius: 50%;
-    position: relative;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.10);
-}}
-
-.chat-avatar-user {{
-    background: {RED};
-}}
-
-.chat-avatar-user::before {{
-    content: "";
-    position: absolute;
-    top: 9px;
-    left: 14px;
-    width: 10px;
-    height: 10px;
-    border: 2px solid white;
-    border-radius: 50%;
-}}
-
-.chat-avatar-user::after {{
-    content: "";
-    position: absolute;
-    left: 10px;
-    bottom: 9px;
-    width: 18px;
-    height: 10px;
-    border: 2px solid white;
-    border-radius: 14px 14px 6px 6px;
-}}
-
-.chat-avatar-bot {{
-    background: {NAVY};
-}}
-
-.chat-avatar-bot::before {{
-    content: "";
-    position: absolute;
-    top: 12px;
-    left: 10px;
-    width: 18px;
-    height: 14px;
-    border: 2px solid white;
-    border-radius: 5px;
-}}
-
-.chat-avatar-bot::after {{
-    content: "";
-    position: absolute;
-    top: 17px;
-    left: 15px;
-    width: 4px;
-    height: 4px;
-    background: white;
-    border-radius: 50%;
-    box-shadow: 8px 0 0 white, 4px 7px 0 -1px white;
-}}
-
-.chat-bubble {{
-    position: relative;
-    flex: 1;
-    border-radius: 8px;
-    padding: 0.85rem 4.5rem 1.05rem 1rem;
-    min-height: 48px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-}}
-
-.chat-bubble-user {{
-    background: #FFF2F2;
-    border: 1px solid #F1D7D8;
-}}
-
-.chat-bubble-bot {{
-    background: #F3F7FC;
-    border: 1px solid #E1EAF4;
-}}
-
-.chat-bubble-crisis {{
-    background: #FFF3F3;
-    border: 1px solid #EFC2C3;
-}}
-
-.chat-text {{
-    color: {TEXT};
-    font-size: 0.92rem;
-    line-height: 1.6;
-    font-weight: 400;
-}}
-
-.chat-time {{
-    position: absolute;
-    right: 0.9rem;
-    bottom: 0.65rem;
-    color: {MUTED};
-    font-size: 0.68rem;
-    font-weight: 600;
-    white-space: nowrap;
-}}
-
-/* ── Misc ── */
-.stAlert {{ border-radius: 12px !important; }}
-.stMarkdown h2 {{ color: {TEXT} !important; }}
-.stMarkdown h3 {{ color: {NAVY} !important; }}
-hr {{ border-color: {BORDER} !important; margin: 0.4rem 0 !important; }}
-.streamlit-expanderHeader,
-[data-testid="stExpander"] summary,
-[data-testid="stExpander"] > details > summary {{
-    background-color: white !important;
-    border-radius: 8px !important;
-    color: {RED} !important;
-    font-weight: 600 !important;
-    font-size: 0.83rem !important;
-    border: 1px solid {BORDER} !important;
-}}
-[data-testid="stExpander"] {{
-    background-color: white !important;
-    border: 1px solid {BORDER} !important;
-    border-radius: 10px !important;
-}}
-[data-testid="stExpander"] > details {{
-    background-color: white !important;
-}}
-/* Keep column padding light. We will control real spacing using explicit spacer columns. */
-[data-testid="column"] {{ padding: 0 0.35rem !important; }}
-
-
-/* ── Reusable label helpers ── */
-.analysis-header {{
-    display: block;
-    color: {RED};
-    font-size: 1.07rem;
-    font-weight: 700;
-    border-bottom: 2px solid {RED};
-    padding-bottom: 0.45rem;
-    margin-bottom: 0.6rem;
-}}
-.chat-label {{
-    display: block;
-    color: {RED};
-    font-size: 0.95rem;
-    font-weight: 800;
-    padding-bottom: 0.55rem;
-    margin-bottom: 0.75rem;
-    border-bottom: 1.5px solid #D8B7B8;
-}}
-
-</style>
-"""
-
-
-def load_css() -> None:
-    """Inject the single CSS block. Call once at the start of main()."""
-    st.markdown(CSS, unsafe_allow_html=True)
+def load_css():
+    with open(CSS_FILE, "r", encoding="utf-8") as f:
+        st.markdown(
+            f"<style>{f.read()}</style>",
+            unsafe_allow_html=True,
+        )
 
 
 # ── 5. BACKEND INTEGRATION ────────────────────────────────────────────────────
@@ -661,7 +294,7 @@ def render_about_us_tab() -> None:
     st.markdown(f"""
 <div style="text-align:center; margin-bottom:2rem;">
     <div style="display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:0.4rem;">
-        <img src="/app/static/team_icon.png" alt=""
+        <img src="/app/static/img/team_icon.png" alt=""
              style="height:36px; width:36px; object-fit:contain;"
              onerror="this.style.display='none'">
         <div style="color:{RED}; font-size:1.6rem; font-weight:700;">Meet the Team</div>
@@ -713,14 +346,14 @@ def render_banner() -> None:
     st.markdown(f"""
 <div style="background:#9B1C1F; padding:0.75rem 2rem; display:flex; align-items:center; justify-content:space-between; border-bottom:3px solid #7B1618; margin:0;">
     <div style="display:flex; align-items:center; gap:14px;">
-        <img src="/app/static/ITI.svg" alt="ITI" style="height:40px; filter:brightness(0) invert(1);" onerror="this.style.display='none'">
+        <img src="/app/static/img/ITI.svg" alt="ITI" style="height:40px; filter:brightness(0) invert(1);" onerror="this.style.display='none'">
         <div>
             <div style="color:white; font-size:0.9rem; font-weight:700; letter-spacing:0.3px;">NLP Final Task 2026</div>
             <div style="color:rgba(255,255,255,0.6); font-size:0.7rem; letter-spacing:0.2px;">ITI Student Demo Project</div>
         </div>
     </div>
     <div style="display:flex; align-items:center; gap:4px;">
-        <img src="/app/static/{ICONS['hero'].name}" alt=""
+        <img src="/app/static/img/{ICONS['hero'].name}" alt=""
              style="height:38px; width:38px; object-fit:contain; filter:brightness(15); mix-blend-mode:screen;"
              onerror="this.style.display='none'">
         <span style="font-size:26px; font-weight:700; color:white; letter-spacing:-1px; font-family:Georgia,serif;">RAG</span>
@@ -758,7 +391,7 @@ def render_analysis_card(label: str, value: str, icon_key: str) -> None:
     justify-content:center;
     overflow:hidden;
 ">
-    <img src="/app/static/{icon_name}" alt=""
+    <img src="/app/static/img/{icon_name}" alt=""
         style="
             width:{ANALYSIS_ICON_SIZE}px;
             height:{ANALYSIS_ICON_SIZE}px;
@@ -837,7 +470,7 @@ def render_help_card() -> None:
     padding: 1.25rem 1.4rem;
 ">
     <div style="display:flex; align-items:center; gap:10px; margin-bottom:0.5rem;">
-        <img src="/app/static/immediately_icon.png"
+        <img src="/app/static/img/immediately_icon.png"
              alt=""
              style="width:{HELP_ICON_SIZE}px; height:{HELP_ICON_SIZE}px; object-fit:contain;"
              onerror="this.style.display='none'">
@@ -1158,23 +791,36 @@ def render_chat_tab() -> None:
         with sample_area:
             st.markdown(
                 f"<div style='color:{NAVY}; font-size:0.95rem; font-weight:700;"
-                " margin-top:-0.2rem; margin-bottom:0.45rem;'>Try a question</div>",
+                " margin-top:-0.2rem; margin-bottom:0.65rem;'>Try a multilingual question</div>",
                 unsafe_allow_html=True,
             )
 
-            # 2 × 2 sample question grid with proper side padding
+            # Create a 2x2 grid layout
             r1c1, r1c2 = st.columns(2, gap="large")
             r2c1, r2c2 = st.columns(2, gap="large")
 
-            for col, idx in [(r1c1, 0), (r1c2, 1), (r2c1, 2), (r2c2, 3)]:
-                with col:
-                    if st.button(
-                        SAMPLE_QUESTIONS[idx],
-                        key=f"s{idx}",
-                        use_container_width=True
-                    ):
-                        st.session_state.prefill = SAMPLE_QUESTIONS[idx]
-                        st.rerun()
+            cols = [r1c1, r1c2, r2c1, r2c2]
+            for idx, q_data in enumerate(SAMPLE_QUESTIONS):
+                with cols[idx]:
+                    # Wrap each question inside an interactive card
+                    with st.container(border=True):
+                        col_tag, col_lbl = st.columns([0.4, 0.6])
+                        with col_tag:
+                            st.caption(f"**{q_data['tag']}**")
+                        with col_lbl:
+                            st.markdown(
+                                f"<div style='text-align:right; font-size:0.75rem; color:{RED}; font-weight:700;'>{q_data['label']}</div>",
+                                unsafe_allow_html=True
+                            )
+
+                        # Clean clickable sentence button
+                        if st.button(
+                                q_data["text"],
+                                key=f"s{idx}",
+                                use_container_width=True
+                        ):
+                            st.session_state.prefill = q_data["text"]
+                            st.rerun()
 
         st.markdown("<div style='margin-top:0.8rem;'></div>", unsafe_allow_html=True)
 
@@ -1261,7 +907,7 @@ def render_system_flow_tab() -> None:
 
         header_html = (
             f'<div style="display:flex; align-items:center; gap:10px; margin-bottom:0.25rem;">'
-            f'<img src="/app/static/system_icon.png" alt="" '
+            f'<img src="/app/static/img/system_icon.png" alt="" '
             f'style="width:{SYSTEM_HEAD_ICON_SIZE}px; height:{SYSTEM_HEAD_ICON_SIZE}px; object-fit:contain;" '
             f'onerror="this.style.display=\'none\'">'
             f'<h3 style="color:{NAVY}; margin:0; font-size:1.55rem;">Pipeline Architecture</h3>'
@@ -1280,7 +926,7 @@ def render_system_flow_tab() -> None:
             if step_icon:
                 icon_name = step_icon.name
                 icon_html = (
-                    f'<img src="/app/static/{icon_name}" alt="" '
+                    f'<img src="/app/static/img/{icon_name}" alt="" '
                     f'style="width:{SYSTEM_STEP_ICON_SIZE}px; height:{SYSTEM_STEP_ICON_SIZE}px; object-fit:contain;" '
                     f'onerror="this.style.display=\'none\'">'
                 )
@@ -1378,7 +1024,7 @@ def render_disclaimer_tab() -> None:
 
         header_html = (
             f'<div style="display:flex; align-items:center; gap:12px; margin-bottom:0.55rem;">'
-            f'<img src="/app/static/disclaimer_icon.png" alt="" '
+            f'<img src="/app/static/img/disclaimer_icon.png" alt="" '
             f'style="width:{DISCLAIMER_ICON_SIZE}px; height:{DISCLAIMER_ICON_SIZE}px; '
             f'object-fit:contain; opacity:0.92; filter:grayscale(0.2);" '
             f'onerror="this.style.display=\'none\'">'
